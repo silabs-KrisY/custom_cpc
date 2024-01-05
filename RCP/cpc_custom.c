@@ -308,7 +308,7 @@ static cpc_endpoint_status_t connect(){
                                          window_size);
 
   if (status != SL_STATUS_OK && status != SL_STATUS_ALREADY_EXISTS ) {
-    debug_print("sl_cpc_open_user_endpoint failed, status = 0x%x\r\n", status);
+    debug_print("sl_cpc_open_user_endpoint failed, status = 0x%lx\r\n", status);
     return CPC_ENDPOINT_CLOSED;
   }
 
@@ -316,7 +316,7 @@ static cpc_endpoint_status_t connect(){
                                       SL_CPC_ENDPOINT_ON_IFRAME_WRITE_COMPLETED,
                                       (void *)cpc_write_complete);
   if (status != SL_STATUS_OK) {
-    debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_IFRAME_WRITE_COMPLETED failed, status = 0x%x\r\n", status);
+    debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_IFRAME_WRITE_COMPLETED failed, status = 0x%lx\r\n", status);
     return CPC_ENDPOINT_CLOSED;
   }
 
@@ -324,8 +324,8 @@ static cpc_endpoint_status_t connect(){
                                       SL_CPC_ENDPOINT_ON_IFRAME_RECEIVE,
                                       (void *)cpc_read_command);
   if (status != SL_STATUS_OK) {
-      debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_IFRAME_RECEIVE failed, status = 0x%x\r\n", status);
-      return CPC_ENDPOINT_CLOSED;
+    debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_IFRAME_RECEIVE failed, status = 0x%lx\r\n", status);
+    return CPC_ENDPOINT_CLOSED;
   }
 
 
@@ -333,8 +333,8 @@ static cpc_endpoint_status_t connect(){
                                       SL_CPC_ENDPOINT_ON_ERROR,
                                       (void*)cpc_error_cb);
   if (status != SL_STATUS_OK) {
-      debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_ERROR failed, status = 0x%x\r\n", status);
-      return CPC_ENDPOINT_CLOSED;
+    debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_ERROR failed, status = 0x%lx\r\n", status);
+    return CPC_ENDPOINT_CLOSED;
   }
 
 
@@ -342,8 +342,8 @@ static cpc_endpoint_status_t connect(){
                                       SL_CPC_ENDPOINT_ON_CONNECT,
                                       (void*)cpc_connect_command);
   if (status != SL_STATUS_OK) {
-      debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_CONNECT failed, status = 0x%x\r\n", status);
-       return CPC_ENDPOINT_CLOSED;
+    debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_CONNECT failed, status = 0x%lx\r\n", status);
+    return CPC_ENDPOINT_CLOSED;
   }
 
   return CPC_ENDPOINT_OPEN;
@@ -359,7 +359,7 @@ void cpc_test_endpoint_status(){
   if ( endpoint_status == CPC_ENDPOINT_CLOSED ){
       debug_print("ep closed, connecting...\r\n");
       endpoint_status = connect();
-      debug_print("ep status after connect attempt = %d\r\n", endpoint_status);
+      debug_print("ep status after connection attempt = %d\r\n", endpoint_status);
   }
 }
 
@@ -367,18 +367,17 @@ void cpc_test_endpoint_status(){
 void cpc_custom_task(void *pvParameter) {
   (void)pvParameter;
 
-  // Check endpoint state and connect
-    cpc_test_endpoint_status();
-
-    // Any other cpc init tasks go here
-    while (1) {
-        cpc_custom_process_action();
-    }
+  while (1) {
+      cpc_custom_process_action();
+  }
 }
 #endif
 
 void cpc_custom_init(){
   debug_print("cpc_custom_init\r\n");
+
+  // Check endpoint state and connect if needed
+  cpc_test_endpoint_status();
 
 // If FreeRTOS, create polling task
 #if defined(SL_CATALOG_KERNEL_PRESENT)
@@ -395,7 +394,7 @@ void cpc_custom_process_action(){
   // This is a polled function, called either from the super loop or
   // as a FreeRTOS task
 
-  // Verify that endpoint is connected
+  // Check endpoint state and connect if needed
   cpc_test_endpoint_status();
 
 }
