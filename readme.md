@@ -110,7 +110,7 @@ uart_device_file: /dev/ttyACM0
 
 5. As currently implemented, the return value for multi-byte values is printed to the console byte-by-byte in litte endian byte order. So for example, a CTUNE value of 0xA5 will be printed as 0xA5 0x00. 
 
-6. If SWODEBUG is #defined as 1 in the RCP firmware, some debug messages are printed to the SWO console. Viewing these messages requires a debugger connection between the RCP MCU and a WSTK or other debugger. The SWO console of the Simplicity Commander tool works well for this.
+6. If SWODEBUG is #defined as 1 in the RCP firmware, some debug messages are printed to the SWO console. Viewing these messages requires a debugger connection between the RCP MCU and a WSTK or other debugger. The SWO console of the Simplicity Commander tool works well for this. SWO debug does require the addition of two components to the RCP firmware project: Services->IO Stream->Driver->IO Stream: SWO and Services->IO Stream->IO Stream: Retarget STDIO.
 
 ## Examples
 

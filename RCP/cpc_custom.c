@@ -34,10 +34,13 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "em_gpio.h"
-#include "task.h"
 #include "rail_ieee802154.h"
 #include "rail.h"
 #include "sl_se_manager_util.h" // include for SE manager API
+
+#if defined(SL_CATALOG_KERNEL_PRESENT)
+#include "task.h"
+#endif
 
 #define SWODEBUG 1
 
@@ -75,15 +78,20 @@ sl_se_command_context_t cmd_ctx;
 
 uint8_t* tx_ptr=NULL; // ptr for TX
 
+// Buffer management defines for FreeRTOS/bare metal
+#if defined(SL_CATALOG_KERNEL_PRESENT)
+#define MALLOC pvPortMalloc
+#define FREE   vPortFree
+#else
+#define MALLOC malloc
+#define FREE free
+#endif
+
 static void process_command(uint8_t *commandData, uint16_t size){
   RAIL_Status_t rail_status;
   sl_status_t slstatus=SL_STATUS_OK;
   uint32_t ctune_val=0u;
   uint32_t se_version;
-
-  //int16_t powerDDbm;
-  //uint16_t channel;
-  //uint8_t cpc_buf[256];
   uint8_t transmit_len;
   EFM_ASSERT(tx_ptr == NULL); //don't overwrite previous buffer - shouldn't happen?
   // TODO: check size?
@@ -91,7 +99,7 @@ static void process_command(uint8_t *commandData, uint16_t size){
   switch ( commandData[0] ){
     case CPC_COMMAND_GET_CUST_VERSION:
       debug_print("Cmd received: CPC_COMMAND_GET_CUST_VERSION\r\n");
-      tx_ptr = pvPortMalloc(sizeof(customer_version));
+      tx_ptr = MALLOC(sizeof(customer_version));
       memcpy(tx_ptr,&customer_version,sizeof(customer_version));
       transmit_len = sizeof(customer_version);
       break;
@@ -100,14 +108,14 @@ static void process_command(uint8_t *commandData, uint16_t size){
       debug_print("Cmd received: CPC_COMMAND_GET_SE_VERSION\r\n");
       slstatus = sl_se_get_se_version(&cmd_ctx, &se_version);
       debug_print("sl_se_get_se_version status 0x%lx\r\n", slstatus);
-      tx_ptr = pvPortMalloc(sizeof(se_version));
+      tx_ptr = MALLOC(sizeof(se_version));
       memcpy(tx_ptr,&se_version,sizeof(se_version));
       transmit_len = sizeof(se_version);
       break;
 
     case CPC_COMMAND_GET_CTUNE_TOKEN:
       debug_print("Cmd received: CPC_COMMAND_GET_CTUNE_TOKEN\r\n");
-      tx_ptr = pvPortMalloc(sizeof(MFG_CTUNE_VAL));
+      tx_ptr = MALLOC(sizeof(MFG_CTUNE_VAL));
       memcpy(tx_ptr,&MFG_CTUNE_VAL,sizeof(MFG_CTUNE_VAL));
       transmit_len = sizeof(MFG_CTUNE_VAL);
       break;
@@ -124,7 +132,7 @@ static void process_command(uint8_t *commandData, uint16_t size){
       debug_print("writing ctune token 0x%lx\r\n", ctune_val);
       slstatus = sl_se_write_user_data(&cmd_ctx, USERDATA_CTUNE_OFFSET, &ctune_val, 4);
       debug_print("sl_se_write_user_data status 0x%lx\r\n", slstatus);
-      tx_ptr = pvPortMalloc(sizeof(uint16_t)); // two byte status reply
+      tx_ptr = MALLOC(sizeof(uint16_t)); // two byte status reply
       memcpy(tx_ptr, &slstatus, sizeof(uint16_t)); //copy lower two bytes of slstatus
       transmit_len = sizeof(uint16_t);
       break;
@@ -133,7 +141,7 @@ static void process_command(uint8_t *commandData, uint16_t size){
       debug_print("Cmd received: CPC_COMMAND_GET_CTUNE_VALUE\r\n");
       ctune_val = (uint16_t) RAIL_GetTune(emPhyRailHandle);
       debug_print("RAIL_GetTune returned 0x%lx",ctune_val);
-      tx_ptr = pvPortMalloc(sizeof(uint16_t)); // return ctune_val as uint16_t
+      tx_ptr = MALLOC(sizeof(uint16_t)); // return ctune_val as uint16_t
       memcpy(tx_ptr,&ctune_val,sizeof(uint16_t));
       transmit_len = sizeof(uint16_t);
       break;
@@ -148,7 +156,7 @@ static void process_command(uint8_t *commandData, uint16_t size){
      debug_print("writing ctune value 0x%lx\r\n", ctune_val);
      rail_status = RAIL_SetTune(emPhyRailHandle,ctune_val);
      debug_print("RAIL_SetTune 0x%x\r\n", rail_status);
-     tx_ptr = pvPortMalloc(sizeof(rail_status)); // rail_status reply
+     tx_ptr = MALLOC(sizeof(rail_status)); // rail_status reply
      memcpy(tx_ptr, &rail_status, sizeof(rail_status)); //copy rail_status
      transmit_len = sizeof(rail_status);
      break;
@@ -159,7 +167,7 @@ static void process_command(uint8_t *commandData, uint16_t size){
       debug_print("gpio write value %d\r\n", commandData[1]);
       GPIO_PinModeSet(gpioPortD, 2, gpioModePushPull, commandData[1]);
       // return default status (SL_STATUS_OK)
-      tx_ptr = pvPortMalloc(sizeof(uint16_t));
+      tx_ptr = MALLOC(sizeof(uint16_t));
       memcpy(tx_ptr, &slstatus, sizeof(uint16_t)); //copy lower two bytes of slstatus
       transmit_len = sizeof(uint16_t);
       break;
@@ -170,7 +178,7 @@ static void process_command(uint8_t *commandData, uint16_t size){
       //TODO: read channel here
       rail_status = RAIL_StartTxStream(emPhyRailHandle, DEFAULT_802154_CH, RAIL_STREAM_CARRIER_WAVE);
       debug_print("RAIL_StartTxStream(), status=0x%x\r\n",rail_status);
-      tx_ptr = pvPortMalloc(sizeof(rail_status)); // rail_status reply
+      tx_ptr = MALLOC(sizeof(rail_status)); // rail_status reply
       memcpy(tx_ptr, &rail_status, sizeof(rail_status)); //copy 1B rail_status
       transmit_len = sizeof(rail_status);
       break;
@@ -180,7 +188,7 @@ static void process_command(uint8_t *commandData, uint16_t size){
       // stop CW stream
       rail_status = RAIL_StopTxStream(emPhyRailHandle);
       debug_print("RAIL_StopTxStream(), status=0x%x\r\n",rail_status);
-      tx_ptr = pvPortMalloc(sizeof(rail_status)); // rail_status reply
+      tx_ptr = MALLOC(sizeof(rail_status)); // rail_status reply
       memcpy(tx_ptr, &rail_status, sizeof(rail_status)); //copy 1B rail_status
       transmit_len = sizeof(rail_status);
       break;
@@ -189,7 +197,7 @@ static void process_command(uint8_t *commandData, uint16_t size){
       debug_print("Cmd received: CPC_COMMAND_ERASE_USERDATA_PAGE\r\n");
       slstatus = sl_se_erase_user_data(&cmd_ctx);
       debug_print("sl_se_erase_user_data status 0x%lx\r\n", slstatus);
-      tx_ptr = pvPortMalloc(sizeof(uint16_t)); // two byte status reply
+      tx_ptr = MALLOC(sizeof(uint16_t)); // two byte status reply
       memcpy(tx_ptr, &slstatus, sizeof(uint16_t)); //copy lower two bytes of slstatus
       transmit_len = sizeof(uint16_t);
       break;
@@ -218,7 +226,7 @@ static void cpc_write_complete(sl_cpc_user_endpoint_id_t endpoint_id, void *buff
   if (status == 0) {
     debug_print("successfully completed write\r\n");
     if (tx_ptr) {
-        vPortFree(tx_ptr); // free the tx buffer
+        FREE(tx_ptr); // free the tx buffer
         tx_ptr = NULL;
     }
   }
@@ -299,32 +307,44 @@ static cpc_endpoint_status_t connect(){
                                          flags,
                                          window_size);
 
-  if (status != SL_STATUS_OK && status != SL_STATUS_ALREADY_EXISTS )
-       return CPC_ENDPOINT_CLOSED;
+  if (status != SL_STATUS_OK && status != SL_STATUS_ALREADY_EXISTS ) {
+    debug_print("sl_cpc_open_user_endpoint failed, status = 0x%lx\r\n", status);
+    return CPC_ENDPOINT_CLOSED;
+  }
 
   status = sl_cpc_set_endpoint_option(&custom_endpoint_handle,
                                       SL_CPC_ENDPOINT_ON_IFRAME_WRITE_COMPLETED,
                                       (void *)cpc_write_complete);
-  if (status != SL_STATUS_OK)
-     return CPC_ENDPOINT_CLOSED;
+  if (status != SL_STATUS_OK) {
+    debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_IFRAME_WRITE_COMPLETED failed, status = 0x%lx\r\n", status);
+    return CPC_ENDPOINT_CLOSED;
+  }
 
   status = sl_cpc_set_endpoint_option(&custom_endpoint_handle,
                                       SL_CPC_ENDPOINT_ON_IFRAME_RECEIVE,
                                       (void *)cpc_read_command);
-  if (status != SL_STATUS_OK)
-       return CPC_ENDPOINT_CLOSED;
+  if (status != SL_STATUS_OK) {
+    debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_IFRAME_RECEIVE failed, status = 0x%lx\r\n", status);
+    return CPC_ENDPOINT_CLOSED;
+  }
+
 
   status = sl_cpc_set_endpoint_option(&custom_endpoint_handle,
                                       SL_CPC_ENDPOINT_ON_ERROR,
                                       (void*)cpc_error_cb);
-  if (status != SL_STATUS_OK)
-       return CPC_ENDPOINT_CLOSED;
+  if (status != SL_STATUS_OK) {
+    debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_ERROR failed, status = 0x%lx\r\n", status);
+    return CPC_ENDPOINT_CLOSED;
+  }
+
 
   status = sl_cpc_set_endpoint_option(&custom_endpoint_handle,
                                       SL_CPC_ENDPOINT_ON_CONNECT,
                                       (void*)cpc_connect_command);
-  if (status != SL_STATUS_OK)
-         return CPC_ENDPOINT_CLOSED;
+  if (status != SL_STATUS_OK) {
+    debug_print("sl_cpc_set_endpoint_option SL_CPC_ENDPOINT_ON_CONNECT failed, status = 0x%lx\r\n", status);
+    return CPC_ENDPOINT_CLOSED;
+  }
 
   return CPC_ENDPOINT_OPEN;
 
@@ -339,6 +359,7 @@ void cpc_test_endpoint_status(){
   if ( endpoint_status == CPC_ENDPOINT_CLOSED ){
       debug_print("ep closed, connecting...\r\n");
       endpoint_status = connect();
+      debug_print("ep status after connection attempt = %d\r\n", endpoint_status);
   }
 }
 
@@ -346,18 +367,17 @@ void cpc_test_endpoint_status(){
 void cpc_custom_task(void *pvParameter) {
   (void)pvParameter;
 
-  // Check endpoint state and connect
-    cpc_test_endpoint_status();
-
-    // Any other cpc init tasks go here
-    while (1) {
-        cpc_custom_process_action();
-    }
+  while (1) {
+      cpc_custom_process_action();
+  }
 }
 #endif
 
 void cpc_custom_init(){
   debug_print("cpc_custom_init\r\n");
+
+  // Check endpoint state and connect if needed
+  cpc_test_endpoint_status();
 
 // If FreeRTOS, create polling task
 #if defined(SL_CATALOG_KERNEL_PRESENT)
@@ -374,7 +394,7 @@ void cpc_custom_process_action(){
   // This is a polled function, called either from the super loop or
   // as a FreeRTOS task
 
-  // Verify that endpoint is connected
+  // Check endpoint state and connect if needed
   cpc_test_endpoint_status();
 
 }
