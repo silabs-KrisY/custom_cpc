@@ -44,7 +44,7 @@
 #define APP_VERSION_MAJOR 0
 #endif
 #ifndef APP_VERSION_MINOR
-#define APP_VERSION_MINOR 1
+#define APP_VERSION_MINOR 2
 #endif
 
 #define ENABLE_TRACING false //if true, prints debug info to stderr
@@ -66,6 +66,8 @@ static struct option long_options[] = {
      {"gpio_write",  required_argument, 0,  'j' },
      {"erase_userdata_page",  no_argument, 0,  'k' },
      {"version", no_argument, 0, 'v'},
+     {"btl_version", no_argument, 0, 'l'},
+     {"app_properties_version", no_argument, 0, 'm'},
      {0,           0,                 0,  0  }};
 
 #define HELP_MESSAGE \
@@ -92,6 +94,8 @@ static struct option long_options[] = {
 "                             a default power level. \n"\
 "--tone_stop                Disable the CW tone on the transmitter of the RCP.\n"\
 "--version                  Prints the version of the host application.\n"\
+"--btl_version              Gets the bootloader version running on the RCP target.\n"\
+"--app_properties_version   Gets the app version from the Application_Properties_t struct of the RCP application.\n"\
 "\n"\
 
 #ifndef DEFAULT_CHANNEL
@@ -122,7 +126,7 @@ static void connectcpc(){
   } while ((ret != 0) && (retry < TIMEOUT_SECONDS));
 
   if (ret < 0) {
-    fprintf(stderr,"cpc_init returned with %d\n", ret);
+    fprintf(stderr,"cpc_init returned with %d (%s)\n", ret, strerror(-ret));
     exit(EXIT_FAILURE);
   }
   
@@ -251,6 +255,14 @@ int main(int argc, char* argv[]) {
           printf("App Version: %d.%d\r\n", APP_VERSION_MAJOR, APP_VERSION_MINOR);
           exit(0);
           break;
+
+        case 'l':
+          custCommand = CPC_COMMAND_GET_BTL_VERSION;
+          break;
+
+        case 'm':
+          custCommand = CPC_COMMAND_GET_APP_PROPERTIES_VERSION;
+          break;
           
         default:
         break;
@@ -268,6 +280,8 @@ int main(int argc, char* argv[]) {
       case CPC_COMMAND_TONE_START:
       case CPC_COMMAND_TONE_STOP:
       case CPC_COMMAND_ERASE_USERDATA_PAGE:
+      case CPC_COMMAND_GET_BTL_VERSION:
+      case CPC_COMMAND_GET_APP_PROPERTIES_VERSION:
         /* For these, just send command and print result and exit*/
         debug_print("sending command 0x%x with no argument\r\n", custCommand);
         sendCmd(cpc_tx_buf,1);

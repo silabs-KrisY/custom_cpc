@@ -37,6 +37,7 @@
 #include "rail_ieee802154.h"
 #include "rail.h"
 #include "sl_se_manager_util.h" // include for SE manager API
+#include "btl_interface.h"
 
 #if defined(SL_CATALOG_KERNEL_PRESENT)
 #include "task.h"
@@ -93,6 +94,9 @@ static void process_command(uint8_t *commandData, uint16_t size){
   uint32_t ctune_val=0u;
   uint32_t se_version;
   uint8_t transmit_len;
+  BootloaderInformation_t bootloaderInfo;
+  extern const ApplicationProperties_t sl_app_properties;
+
   EFM_ASSERT(tx_ptr == NULL); //don't overwrite previous buffer - shouldn't happen?
   // TODO: check size?
 
@@ -200,6 +204,23 @@ static void process_command(uint8_t *commandData, uint16_t size){
       tx_ptr = MALLOC(sizeof(uint16_t)); // two byte status reply
       memcpy(tx_ptr, &slstatus, sizeof(uint16_t)); //copy lower two bytes of slstatus
       transmit_len = sizeof(uint16_t);
+      break;
+
+    case CPC_COMMAND_GET_BTL_VERSION:
+      // get version info from bootloader API
+      debug_print("Cmd received: CPC_COMMAND_GET_BTL_VERSION\r\n");
+      bootloader_getInfo(&bootloaderInfo);
+      tx_ptr = MALLOC(sizeof(bootloaderInfo.version));
+      memcpy(tx_ptr, &bootloaderInfo.version, sizeof(bootloaderInfo.version));
+      transmit_len = sizeof(bootloaderInfo.version);
+      break;
+
+    case CPC_COMMAND_GET_APP_PROPERTIES_VERSION:
+      // get version from Application_Properties_t (set in App Properties component)
+      debug_print("Cmd received: CPC_COMMAND_GET_APP_PROPERTIES_VERSION\r\n");
+      tx_ptr = MALLOC(sizeof(sl_app_properties.app.version));
+      memcpy(tx_ptr, &sl_app_properties.app.version, sizeof(sl_app_properties.app.version));
+      transmit_len = sizeof(sl_app_properties.app.version);
       break;
 
     default:

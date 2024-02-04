@@ -97,6 +97,8 @@ uart_device_file: /dev/ttyACM0
                              a default power level. 
 --tone_stop                Disable the CW tone on the transmitter of the RCP.
 --version                  Prints the version of the host application.
+--btl_version              Gets the bootloader version running on the RCP target.
+--app_properties_version   Gets the app version from the Application_Properties_t struct of the RCP application.
 ```
 
 ### Notes
