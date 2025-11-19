@@ -38,6 +38,8 @@
 #include "rail.h"
 #include "sl_se_manager_util.h" // include for SE manager API
 #include "btl_interface.h"
+#include "em_cmu.h"
+#include "em_msc.h"
 
 #if defined(SL_CATALOG_KERNEL_PRESENT)
 #include "task.h"
@@ -49,7 +51,7 @@
             do { if (SWODEBUG) printf(__VA_ARGS__); } while (0)
 
 // Fetch CTUNE value from USERDATA page as a manufacturing token
-#define USERDATA_CTUNE_OFFSET  0x100 //EFR32xG21 specific
+#define USERDATA_CTUNE_OFFSET  0x100
 #define MFG_CTUNE_ADDR (USERDATA_BASE + USERDATA_CTUNE_OFFSET)
 #define MFG_CTUNE_VAL  (*((uint16_t *) (MFG_CTUNE_ADDR)))
 
@@ -63,7 +65,6 @@ typedef enum {
 } cpc_endpoint_status_t;
 
 static cpc_endpoint_status_t endpoint_status = CPC_ENDPOINT_CLOSED;
-static volatile bool send_button_pressed = false;
 extern RAIL_Handle_t emPhyRailHandle;
 
 // 32-bit customer version (can be overridden global compiler define)
@@ -89,6 +90,8 @@ uint8_t* tx_ptr=NULL; // ptr for TX
 #endif
 
 static void process_command(uint8_t *commandData, uint16_t size){
+
+  (void) size;
   RAIL_Status_t rail_status;
   sl_status_t slstatus=SL_STATUS_OK;
   uint32_t ctune_val=0u;
@@ -96,6 +99,7 @@ static void process_command(uint8_t *commandData, uint16_t size){
   uint8_t transmit_len;
   BootloaderInformation_t bootloaderInfo;
   extern const ApplicationProperties_t sl_app_properties;
+  MSC_Status_TypeDef msc_status;
 
   EFM_ASSERT(tx_ptr == NULL); //don't overwrite previous buffer - shouldn't happen?
   // TODO: check size?
@@ -134,11 +138,25 @@ static void process_command(uint8_t *commandData, uint16_t size){
       // ctune is lower 16-bits, upper 16-bits are all 0xffff
       ctune_val = (ctune_val & 0x0000ffff) | 0xffff0000;
       debug_print("writing ctune token 0x%lx\r\n", ctune_val);
+#if defined (_SILICON_LABS_32B_SERIES_2_CONFIG_1)
+      // xG21 writes userdata with the SE
       slstatus = sl_se_write_user_data(&cmd_ctx, USERDATA_CTUNE_OFFSET, &ctune_val, 4);
       debug_print("sl_se_write_user_data status 0x%lx\r\n", slstatus);
       tx_ptr = MALLOC(sizeof(uint16_t)); // two byte status reply
       memcpy(tx_ptr, &slstatus, sizeof(uint16_t)); //copy lower two bytes of slstatus
       transmit_len = sizeof(uint16_t);
+#else
+      // use MSC write API to write userdata
+      CMU_ClockEnable(cmuClock_MSC, true);
+      MSC_Init();
+      msc_status = MSC_WriteWord((uint32_t *)MFG_CTUNE_ADDR,&ctune_val,sizeof(ctune_val));
+      MSC_Deinit();
+      debug_print("msc status 0x%x\r\n", msc_status);
+      tx_ptr = MALLOC(sizeof(msc_status)); // status reply
+      memcpy(tx_ptr, &msc_status, sizeof(msc_status)); //copy lower two bytes of msc_status
+      transmit_len = sizeof(msc_status);
+#endif
+
       break;
 
     case CPC_COMMAND_GET_CTUNE_VALUE:
@@ -199,11 +217,23 @@ static void process_command(uint8_t *commandData, uint16_t size){
 
     case CPC_COMMAND_ERASE_USERDATA_PAGE:
       debug_print("Cmd received: CPC_COMMAND_ERASE_USERDATA_PAGE\r\n");
+#if defined (_SILICON_LABS_32B_SERIES_2_CONFIG_1)
+      // xG21 erases userdata with the SE
       slstatus = sl_se_erase_user_data(&cmd_ctx);
       debug_print("sl_se_erase_user_data status 0x%lx\r\n", slstatus);
       tx_ptr = MALLOC(sizeof(uint16_t)); // two byte status reply
       memcpy(tx_ptr, &slstatus, sizeof(uint16_t)); //copy lower two bytes of slstatus
       transmit_len = sizeof(uint16_t);
+#else
+      // use MSC API to erase userdata
+      CMU_ClockEnable(cmuClock_MSC, true);
+      msc_status = MSC_ErasePage((uint32_t *)USERDATA_BASE);
+      debug_print("msc status 0x%x\r\n", msc_status);
+      tx_ptr = MALLOC(sizeof(msc_status)); // status reply
+      memcpy(tx_ptr, &msc_status, sizeof(msc_status)); //copy lower two bytes of msc_status
+      transmit_len = sizeof(msc_status);
+#endif
+
       break;
 
     case CPC_COMMAND_GET_BTL_VERSION:
