@@ -24,9 +24,9 @@ This tutorial will explain the steps to run this simple custom commands applicat
 * 1x Raspberry Pi 4 with [CPCd](https://github.com/SiliconLabs/cpc-daemon) installed
 
 ### Software 
-* Simplicity Studio v5
-* GSDK 4.4.0
-* cpc-daemon 4.4.0
+* Simplicity Studio v6
+* SSDK 2026.6.1
+* cpc-daemon 4.9.1
 
 ### On the Secondary (RCP)
 1. Build and flash a bootloader (in this case: bootloader-uart-xmodem)
@@ -39,18 +39,18 @@ This tutorial will explain the steps to run this simple custom commands applicat
     i. Turn off cpc security (by installing CPC Security None)
     ![](images/cpc_security.png)
 
-    ii. In Secondary Device (Co-Processor) > Configure > Max Number of User Endpoints should be incremented from 0 to at least 1
-    ![](images/cpc_component.png)
-    ![](images/max_endpoints.png)
+    ii. Add a new folder to the root of your firmware project (example: custom_cpc_rcp). You can do this easily within the VS Code IDE by right clicking on the project in the workspace and selecting “New File/Folder Here”.
 
-    iii. Add the following files from the src/RCP folder to your project in Simplicity studio
+    iii. Add the following files from the RCP/custom_cpc_rcp folder in the repo to your project in Simplicity studio
       * *cpc_custom.c*
       * *cpc_custom.h* 
       * *cpc_commands.h*
   
-    Iv. Replace the *app.c* in your Simplicity Studio project with the *app.c* in the src/RCP folder
+    iv. Replace the *app.c* in your Simplicity Studio project with the *app.c* from the RCP folder of the repo.
 
-3. Build the project in SImplicity Studio and flash the binary to the RCP device.
+    v. Add the new source/header files to your firmware project. To do this, right click on the project again, select “Open Configurators 2.0”, and under “Additional Sources->Add header directory”, click the “Add” button, and then select the new folder with the copied files (custom_cpc_rpc in this example). The Simplicity Studio extension will add the source file to your project and also add this folder as a header path. The change shows up in cmake_gcc/<project-name>_project.cmake
+
+3. Build the project in Simplicity Studio and flash the binary to the RCP device.
 4. Connect the RCP to the Host using a serial connection. In this example, the USB port of the WSTK with the 4181B radio board installed is connected to one of the USB ports of the Raspberry Pi.
 
 ### On the Primary (Host)
