@@ -41,10 +41,10 @@
 #endif
 
 #ifndef APP_VERSION_MAJOR
-#define APP_VERSION_MAJOR 0
+#define APP_VERSION_MAJOR 1
 #endif
 #ifndef APP_VERSION_MINOR
-#define APP_VERSION_MINOR 2
+#define APP_VERSION_MINOR 0
 #endif
 
 #define ENABLE_TRACING false //if true, prints debug info to stderr

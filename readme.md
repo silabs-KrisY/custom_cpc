@@ -3,7 +3,7 @@ The purpose of this example application is to demonstrate the creation and use o
 
 For the purpose of this example, *primary* and *host* as well as *secondary* and *RCP* will be used interchangeably.
 
-This sample application works by first initializing and connecting to cpcd via the API call: cpc_init. It then opens a user endpoint using the API call: cpc_open_endpoint. 
+The implemented Linux sample application works by first initializing and connecting to cpcd via the API call: cpc_init. It then opens a user endpoint using the API call: cpc_open_endpoint. 
 
 Commands that wish to write to the RCP from the host will use: cpc_write_endpoint
 
@@ -15,46 +15,49 @@ When reading, the buffer must be at least SL_CPC_READ_MINIMUM_SIZE bytes.
 
 Both APIs will return a negative value in case of error, otherwise it will return the number of bytes read/written.
 
-Note that we are not using encryption on the CPC endpoint in order to facilitate development and debugging. In a production environment, encryption is *strongly recommended*.
+Note that we are not using encryption on the CPC endpoint in this example in order to facilitate development and debugging. In a production environment, encryption is *strongly recommended*.
 
 ## Usage
-This tutorial will explain the steps to run this simple custom commands application. It uses the following components:
+This tutorial will explain the steps to run this simple custom commands application. The example uses the following components (although it should be able to be easily adapted to other platforms and Silicon Labs devices):
 ### Hardware
-* 1x WPK (brd 4002A) + MG21 (brd 4181B)
+* 1x WPK (brd 4002A) + MG21 (brd 4181C)
 * 1x Raspberry Pi 4 with [CPCd](https://github.com/SiliconLabs/cpc-daemon) installed
 
 ### Software 
-* Simplicity Studio v5
-* GSDK 4.4.0
-* cpc-daemon 4.4.0
+* Simplicity Studio v6
+* SSDK 2026.6.1
+* cpc-daemon 4.9.1
 
 ### On the Secondary (RCP)
-1. Build and flash a bootloader (in this case: bootloader-uart-xmodem)
-   ![](images/bootloader.png)
+1. Build and flash a bootloader (in this case: "Bootloader - NCP UART XMODEM")  
+   ![](images/bootloader.png)  
 
-2. Create a new multi-protocol RCP sample app (OpenThread+Zigbee+BLE)
-   ![](images/rcp.png)
-   then in the RCP .slcp file make the following changes under "the software components" tab:
+2. Create a new multi-protocol UART RCP firmware sample app (OpenThread RCP+Zigbee RCP+BLE RCP - UART)  
+   ![](images/rcp.png)  
 
-    i. Turn off cpc security (by installing CPC Security None)
-    ![](images/cpc_security.png)
+    i. In the RCP firmware project .slcp file, turn off cpc security by installing the "CPC Security None" component. We are doing this to facilitate debugging, however encryption is *strongly recommended* for production deployment:  
+    ![](images/cpc_security.png)  
 
-    ii. In Secondary Device (Co-Processor) > Configure > Max Number of User Endpoints should be incremented from 0 to at least 1
-    ![](images/cpc_component.png)
-    ![](images/max_endpoints.png)
+    ii. Add a new folder to the root of your RCP firmware project (example: custom_cpc_rcp). You can do this easily within the VS Code IDE by right clicking on the project in the workspace and selecting “New File/Folder Here”  
+    ![](images/new_folder.png)  
 
-    iii. Add the following files from the src/RCP folder to your project in Simplicity studio
+    iii. Manually copy the following files from the RCP/custom_cpc_rcp folder in this repo to the root of your firmware project folder:
       * *cpc_custom.c*
       * *cpc_custom.h* 
       * *cpc_commands.h*
   
-    Iv. Replace the *app.c* in your Simplicity Studio project with the *app.c* in the src/RCP folder
+    iv. Replace the *app.c* in your generated Simplicity Studio v6 project folder with the *app.c* from the RCP folder of this repo.
 
-3. Build the project in SImplicity Studio and flash the binary to the RCP device.
-4. Connect the RCP to the Host using a serial connection. In this example, the USB port of the WSTK with the 4181B radio board installed is connected to one of the USB ports of the Raspberry Pi.
+    v. Add the new source/header files to your firmware project. We already copied the files, but we need to make sure they are properly added to the cmake file lists. To do this, right click on the project again, select “Open Configurators 2.0”, and under “Additional Sources->Add header directory”, click the “Add” button, and then select the new folder with the copied files (custom_cpc_rpc in this example). The Simplicity Studio extension will add the source file to your project and also add this folder as a header path. The change shows up in cmake_gcc/<project-name>_project.cmake. 
+    ![](images/open_configurator.png)  
+    ![](images/add_folder.png)  
+
+
+3. Build the project (can use the VS Code IDE or command line) and flash the binary to the RCP device on the radio board.
+4. Connect the RCP to the Host using a serial connection. In this example, the USB port of the WSTK with the 4181C radio board installed is connected to one of the USB ports of the Raspberry Pi. Note that you can flash and debug the MG21 via the ethernet interface of the Wireless Pro Kit base board, even if the USB port is plugged into the Raspberry Pi. I recommend this setup for convenience, which avoids having to swap the USB port every time the firmware is flashed.
 
 ### On the Primary (Host)
-1. Copy '*custom_cpc_host*' directory to the host. This can be done using something like *scp*
+1. Copy the '*custom_cpc_host*' directory from this repo to the host. This can be done using something like *scp* or by cloning this repo.
 2. Ssh to the host
 3. Cd to the *custom_cpc_host* directory
 4. Run the 'make' command
@@ -64,7 +67,7 @@ This tutorial will explain the steps to run this simple custom commands applicat
 # Optional, defaults false
 disable_encryption: true 
 ```
-6. The cpc.conf file also needs to point to the serial port connected to the RCP (default shown below):
+6. The cpc.conf file also needs to point to the serial port connected to the RCP (default for the Raspberry Pi is "/dev/ttyACM0" as shown below):
 ```
 # UART device file
 # Mandatory if uart chosen, ignored if spi chosen
@@ -112,7 +115,12 @@ uart_device_file: /dev/ttyACM0
 
 5. As currently implemented, the return value for multi-byte values is printed to the console byte-by-byte in litte endian byte order. So for example, a CTUNE value of 0xA5 will be printed as 0xA5 0x00. 
 
-6. If SWODEBUG is #defined as 1 in the RCP firmware, some debug messages are printed to the SWO console. Viewing these messages requires a debugger connection between the RCP MCU and a WSTK or other debugger. The SWO console of the Simplicity Commander tool works well for this. SWO debug does require the addition of two components to the RCP firmware project: Services->IO Stream->Driver->IO Stream: SWO and Services->IO Stream->IO Stream: Retarget STDIO.
+6. If SWODEBUG is #defined as 1 in the RCP firmware, some debug messages are printed to the SWO console. SWO debug requires the addition of two components to the RCP firmware project: Services->IO Stream->Driver->IO Stream: SWO and Services->IO Stream->IO Stream: Retarget STDIO.  
+![](images/io_stream_swo.png)  
+![](images/retarget_stdio.png)  
+
+Viewing these messages requires a debugger connection between the RCP MCU and a WSTK or other debugger. For the example setup with the Silicon Labs radio board, the ethernet connection to the debugger works well for this. I recommend using the SWO console of the Simplicity Commander tool.  
+![](images/simplicity_commander_swo_console.png)  
 
 ## Examples
 
@@ -182,4 +190,4 @@ Reply to command 0x8, len=1: 0x0
 ```
 
 ## Disclaimer
-The Gecko SDK suite supports development with Silicon Labs IoT SoC and module devices. Unless otherwise specified in the specific directory, all examples are considered to be EXPERIMENTAL QUALITY which implies that the code provided in the repos has not been formally tested and is provided as-is. It is not suitable for production environments without testing and validation by the end user. In addition, this code may not be maintained and there may be no bug maintenance planned for these resources. Silicon Labs may update projects from time to time.
+The Simplicity SDK suite supports development with Silicon Labs IoT SoC and module devices. Unless otherwise specified in the specific directory, all examples are considered to be EXPERIMENTAL QUALITY which implies that the code provided in the repos has not been formally tested and is provided as-is. It is not suitable for production environments without testing and validation by the end user. In addition, this code may not be maintained and there may be no bug maintenance planned for these resources. Silicon Labs may update projects from time to time.
